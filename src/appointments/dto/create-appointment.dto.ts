@@ -5,16 +5,21 @@ import {
   IsNumber,
   IsOptional,
   IsBoolean,
+  IsUUID,
+  IsNotEmpty,
+  MaxLength,
   Min,
   Max,
 } from 'class-validator';
 import { AppointmentType, MedicalPriority } from '../entities/appointment.entity';
 
 export class CreateAppointmentDto {
-  @IsString()
+  @IsUUID()
+  @IsNotEmpty()
   patientId: string;
 
-  @IsString()
+  @IsUUID()
+  @IsNotEmpty()
   doctorId: string;
 
   @IsDateString()
@@ -33,14 +38,17 @@ export class CreateAppointmentDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   specialty?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   reason?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   notes?: string;
 
   @IsOptional()
