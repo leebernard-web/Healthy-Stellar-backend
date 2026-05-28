@@ -8,7 +8,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { User } from '../../auth/entities/user.entity';
+import { User } from './user.entity';
 
 export enum ApiKeyScope {
   READ_RECORDS = 'read:records',
