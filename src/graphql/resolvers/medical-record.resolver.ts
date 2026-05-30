@@ -10,10 +10,14 @@ import {
 } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { InputType, Field } from '@nestjs/graphql';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { MedicalRecord } from '../types/medical-record.type';
 import { Patient } from '../types/patient.type';
 import { GqlAuthGuard } from '../guards/gql-auth.guard';
 import { DataloaderService } from '../dataloader.service';
+import { RecordsService } from '../../records/services/records.service';
+import { Record as RecordEntity } from '../../records/entities/record.entity';
 import DataLoader from 'dataloader';
 
 @InputType()
@@ -31,19 +35,14 @@ export class AddRecordInput {
   stellarTxHash?: string;
 }
 
-interface RecordService {
-  findOne(id: string, requesterId: string): Promise<MedicalRecord | null>;
-  findByPatient(patientId: string, requesterId: string): Promise<MedicalRecord[]>;
-  add(input: AddRecordInput, requesterId: string): Promise<MedicalRecord>;
-}
-
 @Resolver(() => MedicalRecord)
 @UseGuards(GqlAuthGuard)
 export class MedicalRecordResolver {
   constructor(
-    // TODO: inject actual service
-    // private readonly recordService: RecordService,
+    private readonly recordsService: RecordsService,
     private readonly dataloaderService: DataloaderService,
+    @InjectRepository(RecordEntity)
+    private readonly recordRepo: Repository<RecordEntity>,
   ) {}
 
   @Query(() => MedicalRecord, { nullable: true })
@@ -51,16 +50,12 @@ export class MedicalRecordResolver {
     @Args('id', { type: () => ID }) id: string,
     @Context() ctx: { req: { user: { sub: string } } },
   ): Promise<MedicalRecord | null> {
-    // TODO: return this.recordService.findOne(id, ctx.req.user.sub);
-    return {
-      id,
-      patientId: 'stub-patient-id',
-      cid: 'stub-cid',
-      recordType: 'lab_result',
-      uploadedBy: ctx.req.user.sub,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    try {
+      const r = await this.recordsService.findOne(id, ctx.req.user.sub);
+      return this.toGqlType(r, ctx.req.user.sub);
+    } catch {
+      return null;
+    }
   }
 
   @Query(() => [MedicalRecord])
@@ -68,8 +63,8 @@ export class MedicalRecordResolver {
     @Args('patientId', { type: () => ID }) patientId: string,
     @Context() ctx: { req: { user: { sub: string } } },
   ): Promise<MedicalRecord[]> {
-    // TODO: return this.recordService.findByPatient(patientId, ctx.req.user.sub);
-    return [];
+    const result = await this.recordsService.findAll({ patientId } as any);
+    return result.data.map((r) => this.toGqlType(r, ctx.req.user.sub));
   }
 
   @Mutation(() => MedicalRecord)
@@ -77,17 +72,16 @@ export class MedicalRecordResolver {
     @Args('input') input: AddRecordInput,
     @Context() ctx: { req: { user: { sub: string } } },
   ): Promise<MedicalRecord> {
-    // TODO: return this.recordService.add(input, ctx.req.user.sub);
-    return {
-      id: 'stub-id',
-      patientId: input.patientId,
-      cid: input.cid,
-      recordType: input.recordType,
-      stellarTxHash: input.stellarTxHash,
-      uploadedBy: ctx.req.user.sub,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const saved = await this.recordRepo.save(
+      this.recordRepo.create({
+        patientId: input.patientId,
+        cid: input.cid,
+        recordType: input.recordType as any,
+        stellarTxHash: input.stellarTxHash,
+        providerId: ctx.req.user.sub,
+      }),
+    );
+    return this.toGqlType(saved, ctx.req.user.sub);
   }
 
   // DataLoader field resolver — prevents N+1 when querying patient on each record
@@ -97,5 +91,18 @@ export class MedicalRecordResolver {
     @Context() ctx: { patientLoader: DataLoader<string, Patient> },
   ): Promise<Patient | null> {
     return ctx.patientLoader.load(record.patientId);
+  }
+
+  private toGqlType(r: RecordEntity, uploadedBy: string): MedicalRecord {
+    return {
+      id: r.id,
+      patientId: r.patientId,
+      cid: r.cid,
+      recordType: r.recordType as string,
+      stellarTxHash: r.stellarTxHash,
+      uploadedBy,
+      createdAt: r.createdAt,
+      updatedAt: r.createdAt,
+    };
   }
 }

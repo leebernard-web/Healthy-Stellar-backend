@@ -21,7 +21,7 @@ import { PatientModule } from '../patients/patients.module';
 
 import { GqlAuthGuard, GqlRolesGuard } from './guards/gql-auth.guard';
 import { DataLoaderService } from './dataloaders/dataloader.service';
-import { DataloaderService } from './dataloader.service';
+import { MedicalRecordResolver } from './resolvers/medical-record.resolver';
 import { PatientResolver } from './resolvers/patient.resolver';
 import { RecordsResolver } from './resolvers/records.resolver';
 import { AccessGrantsResolver } from './resolvers/access-grants.resolver';
@@ -174,7 +174,7 @@ import { GraphqlPubSubService } from '../pubsub/services/graphql-pubsub.service'
     GqlAuthGuard,
     GqlRolesGuard,
     DataLoaderService,
-    DataloaderService,
+    MedicalRecordResolver,
     PatientResolver,
     RecordsResolver,
     AccessGrantsResolver,
