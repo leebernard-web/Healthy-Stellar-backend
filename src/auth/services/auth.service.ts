@@ -5,6 +5,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserRole } from '../entities/user.entity';
@@ -393,11 +394,72 @@ export class AuthService {
   }
 
   /**
-   * Generate session ID
+   * Request a password reset. Always returns silently to prevent user enumeration.
+   * Returns the raw token so callers can send it via email.
    */
+  async forgotPassword(email: string): Promise<{ token: string } | null> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) return null;
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    await this.userRepository.update(user.id, {
+      passwordResetToken: token,
+      passwordResetTokenExpiresAt: expiresAt,
+    });
+
+    await this.auditService.logAuthenticationEvent('PASSWORD_RESET_REQUESTED', true, {
+      userId: user.id,
+      email: user.email,
+    });
+
+    return { token };
+  }
+
+  /**
+   * Consume a reset token and set a new password. Token is invalidated atomically on use.
+   */
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordResetToken')
+      .where('user.passwordResetToken = :token', { token })
+      .getOne();
+
+    if (!user || !user.passwordResetToken) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    if (!user.passwordResetTokenExpiresAt || user.passwordResetTokenExpiresAt < new Date()) {
+      throw new BadRequestException('Reset token has expired');
+    }
+
+    const passwordValidation = this.passwordValidationService.validatePassword(newPassword);
+    if (!passwordValidation.isValid) {
+      throw new BadRequestException({
+        message: 'Password does not meet security requirements',
+        errors: passwordValidation.errors,
+      });
+    }
+
+    const hashedPassword = await this.passwordValidationService.hashPassword(newPassword);
+
+    await this.userRepository.update(user.id, {
+      passwordHash: hashedPassword,
+      passwordResetToken: null,
+      passwordResetTokenExpiresAt: null,
+      lastPasswordChangeAt: new Date(),
+      requiresPasswordChange: false,
+    });
+
+    await this.auditService.logAuthenticationEvent('PASSWORD_RESET_COMPLETED', true, {
+      userId: user.id,
+      email: user.email,
+    });
+  }
+
   private generateSessionId(): string {
-    return (
-      Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-    );
+    return randomBytes(16).toString('hex');
   }
 }

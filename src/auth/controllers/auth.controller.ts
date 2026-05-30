@@ -19,7 +19,7 @@ import { AuthTokenService } from '../services/auth-token.service';
 import { RefreshTokenStoreService } from '../services/refresh-token-store.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { JwtPayload } from '../services/auth-token.service';
-import { RegisterDto, LoginDto, ChangePasswordDto } from '../dto/auth.dto';
+import { RegisterDto, LoginDto, ChangePasswordDto, ResetPasswordDto, ResetPasswordConfirmDto } from '../dto/auth.dto';
 import { RefreshTokenDto } from '../dto/session.dto';
 import { User, UserRole } from '../entities/user.entity';
 import { AuthRateLimit } from '../../common/throttler/throttler.decorator';
@@ -165,6 +165,31 @@ export class AuthController {
       ),
     );
     return { message: 'All sessions revoked' };
+  }
+
+  /**
+   * Request password reset — sends token via email; silent on unknown email (enum protection)
+   */
+  @Post('forgot-password')
+  @AuthRateLimit()
+  @ApiOperation({ summary: 'Request a password reset email' })
+  @ApiResponse({ status: 200, description: 'Reset email sent if account exists' })
+  async forgotPassword(@Body() { email }: ResetPasswordDto): Promise<{ message: string }> {
+    await this.authService.forgotPassword(email);
+    return { message: 'If that email is registered, a reset link has been sent' };
+  }
+
+  /**
+   * Consume a reset token and set a new password (token is invalidated on first use)
+   */
+  @Post('reset-password')
+  @AuthRateLimit()
+  @ApiOperation({ summary: 'Reset password using a valid one-time token' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid, expired, or already-used token' })
+  async resetPassword(@Body() body: ResetPasswordConfirmDto): Promise<{ message: string }> {
+    await this.authService.resetPassword(body.token, body.newPassword);
+    return { message: 'Password reset successfully' };
   }
 
   /**

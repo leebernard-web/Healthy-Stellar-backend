@@ -145,6 +145,12 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
+  @Column({ nullable: true, length: 128, select: false })
+  passwordResetToken: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  passwordResetTokenExpiresAt: Date;
+
   @Column({ nullable: true })
   deletedAt: Date;
 
