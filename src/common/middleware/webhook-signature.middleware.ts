@@ -57,11 +57,12 @@ export class WebhookSignatureMiddleware implements NestMiddleware {
       throw new UnauthorizedException('Webhook replay detected');
     }
 
-    // 3. HMAC verification
+    // 3. HMAC verification — payload includes nonce to prevent replay bypass
     const rawBody = (req as any).rawBody ?? '';
+    const payload = `${timestamp}.${nonce}.${rawBody}`;
     const expectedHex = crypto
       .createHmac('sha256', this.secret)
-      .update(`${timestamp}.${rawBody}`)
+      .update(payload)
       .digest('hex');
 
     // Constant-time comparison — normalise to same length first to avoid
