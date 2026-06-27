@@ -157,6 +157,7 @@ import { PiiRedactionInterceptor } from './common/interceptors/pii-redaction.int
     DlqModule,
     OperatorRunbookModule,
     IncidentModule,
+    EhrImportModule,
     EventEmitterModule.forRoot(),
   ],
   controllers: [AppController],
