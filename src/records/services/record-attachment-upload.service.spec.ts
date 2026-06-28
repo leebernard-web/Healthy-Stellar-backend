@@ -109,7 +109,8 @@ describe('RecordAttachmentUploadService', () => {
           provide: DigitalSignatureService,
           useValue: {
             hasPdfSignature: jest.fn(),
-            verifyPdfSignature: jest.fn(),
+            extractPdfSignature: jest.fn(),
+            isValidPdfSignatureStructure: jest.fn(),
           },
         },
         {
@@ -205,15 +206,22 @@ describe('RecordAttachmentUploadService', () => {
       encryptionService.encryptRecord.mockResolvedValue(mockEncryptedRecord);
       ipfsService.upload.mockResolvedValue('QmTampered');
       digitalSignatureService.hasPdfSignature.mockReturnValue(true);
-      digitalSignatureService.verifyPdfSignature.mockReturnValue({
-        status: SignatureStatus.INVALID,
+      digitalSignatureService.extractPdfSignature.mockReturnValue({
+        signatureBytes: Buffer.from('BAADFOOD'),
+        byteRange: [0, 50, 100, 30],
+        signerCert: null,
         algorithm: 'sha256',
-        metadata: { error: 'Signature verification failed' },
+        signingTime: null,
       });
+      digitalSignatureService.isValidPdfSignatureStructure.mockReturnValue(false);
 
       const result = await service.uploadAttachment(mockRecord.id, tamperedFile, 'user-789');
 
       expect(result.attachmentId).toBeDefined();
+
+      expect(digitalSignatureService.hasPdfSignature).toHaveBeenCalledWith(tamperedPdf);
+      expect(digitalSignatureService.extractPdfSignature).toHaveBeenCalledWith(tamperedPdf);
+      expect(digitalSignatureService.isValidPdfSignatureStructure).toHaveBeenCalledWith(tamperedPdf);
 
       expect(attachmentRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({

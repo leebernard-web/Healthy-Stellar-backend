@@ -303,6 +303,10 @@ export class RecordAttachmentUploadService {
   /**
    * Extract and verify digital signature from uploaded file.
    * Only processes PDF files; other formats are marked as unsigned.
+   *
+   * On upload, we extract signature metadata and validate the PKCS#7
+   * structure. Full cryptographic verification happens on retrieval
+   * when the stored public key is available.
    */
   private extractAndVerifySignature(
     buffer: Buffer,
@@ -321,8 +325,35 @@ export class RecordAttachmentUploadService {
       };
     }
 
-    const result = this.digitalSignatureService.verifyPdfSignature(buffer, '');
-    return result;
+    const extracted = this.digitalSignatureService.extractPdfSignature(buffer);
+    if (!extracted) {
+      return {
+        status: SignatureStatus.INVALID,
+        metadata: { reason: 'Failed to parse PKCS#7 signature structure' },
+      };
+    }
+
+    const isValidStructure = this.digitalSignatureService.isValidPdfSignatureStructure(buffer);
+    if (!isValidStructure) {
+      return {
+        status: SignatureStatus.INVALID,
+        algorithm: extracted.algorithm,
+        signerCertificate: extracted.signerCert?.toString('base64'),
+        signedAt: extracted.signingTime ?? undefined,
+        metadata: { reason: 'PKCS#7 structure validation failed' },
+      };
+    }
+
+    return {
+      status: SignatureStatus.VALID,
+      algorithm: extracted.algorithm,
+      signerCertificate: extracted.signerCert?.toString('base64'),
+      signedAt: extracted.signingTime ?? undefined,
+      metadata: {
+        byteRange: extracted.byteRange,
+        hasCertificate: !!extracted.signerCert,
+      },
+    };
   }
 
   /**
